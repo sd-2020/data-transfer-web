@@ -1,26 +1,33 @@
 const fs = require('fs');
 const wav = require('wav');
 
-// Frequencies for binary '0' and '1'
-const FREQ_ZERO = 1000;
-const FREQ_ONE = 2000;
+// Frequencies for representing 4 bits (16 combinations)
+const FREQUENCIES = [
+  1000, 1100, 1200, 1300, 1400, 1500, 1600, 1700, 1800, 1900, 2000, 2100, 2200, 2300, 2400, 2500
+];
 
 // WAV settings
-const SAMPLE_RATE = 44100;
-const BIT_DURATION = 0.1;  // Duration of each bit (in seconds)
+const SAMPLE_RATE = 88200;  // Increased sample rate for higher precision
+const BIT_DURATION = 0.02;  // Duration of each bit group (4 bits)
 
-// Read raw binary data from a file (ZIP or any file)
+// Convert a file to binary data
 function fileToBinary(filePath) {
   const data = fs.readFileSync(filePath);
   return Array.from(data).map(byte => byte.toString(2).padStart(8, '0')).join('');
 }
 
-// Generate tone for each bit
-function generateToneForBit(bit) {
+// Map 4 bits to a frequency index
+function binaryToFrequency(binary) {
+  const index = parseInt(binary, 2);  // Convert binary to a number
+  return FREQUENCIES[index];  // Map to frequency
+}
+
+// Generate tone buffer for 4 bits (16 possible values)
+function generateToneForByte(byte) {
   const numSamples = SAMPLE_RATE * BIT_DURATION;
   const toneBuffer = Buffer.alloc(numSamples * 2); // 16-bit mono
 
-  const frequency = bit === '0' ? FREQ_ZERO : FREQ_ONE;
+  const frequency = binaryToFrequency(byte);
 
   for (let i = 0; i < numSamples; i++) {
     const time = i / SAMPLE_RATE;
@@ -40,9 +47,13 @@ function binaryToWav(binaryData, outputWavFile) {
     bitDepth: 16
   });
 
-  const audioBuffer = binaryData.split('').map(generateToneForBit);
-  const combinedBuffer = Buffer.concat(audioBuffer);
+  const audioBuffer = [];
+  for (let i = 0; i < binaryData.length; i += 4) {
+    const byte = binaryData.slice(i, i + 4);  // Group every 4 bits
+    audioBuffer.push(generateToneForByte(byte));
+  }
 
+  const combinedBuffer = Buffer.concat(audioBuffer);
   writer.pipe(fs.createWriteStream(outputWavFile));
   writer.write(combinedBuffer);
   writer.end();
